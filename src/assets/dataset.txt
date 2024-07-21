@@ -1,0 +1,49 @@
+Before the introduction of the modern object life cycle management, developers had to keep track of all the objects they created, make sure they explicitly remove them when done. They are two common modern methods for the memory management namely Garbage Collection and Automatic Reference Counting. Both GC (Garbage Collection) and ARC aim to take burden from the developer so that they need not worry about the reference count, when they should free objects, etc. GC is used in programming languages like Java, C#, Go and other scripting languages and ARC is used in Objective-C and Swift languages. They do this by defining that an object is considered needed as long as there are references to it. In simpler terms, as long as some piece of code is holding on to that object, it is needed.
+
+When an object is no longer used, both reclaim the underlying memory and reuse it for future object allocation. This means there is no explicit deletion and no memory is given back to the operating system.
+
+Garbage Collection
+It works in a way such that the runtime detects unused objects and object graphs in the background. This happens at intermediate intervals, either after a certain amount of time has passed or when the runtime memory gets low, and not released at that exact moment. The GC removes the burden of the developer from freeing or destroying the objects explicitly. All objects are allocated on the heap area managed by the JVM (for Java). They keep track when the objects are no longer referenced in the code. GC can clean up the object graphs including retain cycles(explained later).
+
+Every object tree must have one or more root objects. As long as the application can reach those roots, the whole tree is reachable. Local variables are kept alive by the stack of a thread and hence GC roots. Active Java threads are always considered live objects and are therefore GC roots. Static variables are referenced by their classes. This fact makes them de facto GC roots. Classes themselves can be garbage-collected, which would remove all referenced static variables. To determine which objects are no longer in use, the JVM intermittently runs what is very aptly called as mark-and-sweep-algorithm.
+
+The algorithm traverses all object references, starting with the GC roots, and marks every object found as alive.
+All of the heap memory that is not occupied by marked objects is reclaimed. It is simply marked as free, essentially swept free of unused objects. When objects are no longer referenced directly or indirectly by a GC root, they will be removed.
+But Garbage collection has disadvantages like consuming additional memory (RAM) to run those algorithms and this has a major performance impact. Further, the objects aren’t garbage collected at the very instant. It takes its own time it has a performance impact as well. A peer-reviewed paper came to the conclusion that GC needs five times the memory to perform as fast as explicit memory management. If the memory is compromised, it leads to possible stalls in program execution.
+
+Automatic Reference Counting
+It is a memory management technique which provided reference counting of the objects for the programming languages. Reference counting works by counting the number of references to each object. When the reference count drops to zero the object is definitely unreachable and can be recycled. During compile time, it inserts messages like retain and release which increase and decrease the reference count at runtime, marking for deallocation of objects when the number of references to them reaches zero. Unlike GC, it isn’t a background process and it removes the objects asynchronously at runtime. But ARC doesn’t handle retain cycles which I have explained below.
+
+Retain cycle
+It is the condition when 2 objects keep a reference to each other and are retained, it creates a retain cycle since both objects try to retain each other, making it impossible to release even though there are no external references. At this point, you have a memory leak.
+
+ARC provides a method to avoid retain cycles, but it does require some explicit thought and design by the developer. To achieve this, ARC introduces Storage modifiers that can be applied to object references (such as fields or properties) to specify how the reference will behave. strong, weak and unretained keywords are available currently. By default, references are strong where storing an object reference will force the object to stay alive until the reference is removed. Alternatively, a reference can be marked as weak. In this case, the reference will not keep the object alive, instead, if all other references to the stored object go away, the object will indeed be freed and the reference will automatically be set to nil.unretained references store the object address and do not keep track of the objects life cycle.
+
+```
+//swift implementation
+var name: NSString? 
+strong var name: NSString?
+weak var name: NSString?
+unretained var name: NSString?
+```
+
+A common scenario is to determine a well-defined parent/child or owner/owned relationship between two objects that would otherwise introduce a retain cycle. The parent/owner will maintain a regular reference to the child, while the child or owned object will merely get a weak reference to the parent. This way, the parent can control the (minimum) lifetime of the child, but when the parent object can be freed, the references from the children won't keep it alive.
+
+ARC over GC
+There is no algorithm that can determine with absolute certainty whether some object is garbage or not. GC algorithm can do is to make intelligent guessing, the more intelligent the better. More sophisticated GC algorithms will require more and more CPU and memory to run. Unless GC is provided with 3–4x more memory, there will be poor performance.
+
+If your program needs 100 MB of RAM for its own objects, GC will require you to allocate 200–300 MB of space 😧
+
+There is a direct financial consequence of this. Compare the high-end iPhone vs the high-end Android phones. iPhone 8(2 GB or 3 G​​B) vs the Google Pixel, which has 4GB because the apps on the iPhone simply need less RAM than the same apps written on Android. It is not just that the Android phones need extra memory. Even with that memory, they tend to lag, even the highest end Android phones, because the GC pauses your application. That happens to be the moment when you want to scroll it or do something, which you perceive as a lag.
+
+Basically, the work-around to compensate the poor performance of garbage collection is
+a) throw lots of memory (RAM)
+b) move all the state from the heap to the cache.
+
+Moving heap to cache (Redis almost always) is how dynamic languages like Python or Ruby or JavaScript-on-the-server achieve any scaling at all. In other words, the highly tuned Redis written in C is saving a lot of the infrastructure from GC’s worst effects.
+
+ARC solves the circular reference problem by taxing it on the developer with those modifiers while there aren’t any major performance issues. This detection happens during the compile time, which doesn’t cause any overhead during runtime.
+
+Meanwhile, Rust language has a focus on safety and speed. It accomplishes these goals through many ‘zero-cost abstractions’, which means that in Rust, abstractions cost as little as possible in order to make them work. All of the analysis is done at compile time. Rust adopts the “stack-like” heap behavior for most objects, those that stay within a single thread. In effect, these objects are cleaned up as soon as their “owning” function or scope terminates. There are no circular references as the reference is only borrowed.
+
+Hence the memory management is best when handled during compile time rather than runtime to avoid memory and performance overheads.
